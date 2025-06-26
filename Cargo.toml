@@ -1,0 +1,3 @@
+[workspace]
+members = ["csta", "csta_core", "csta_derive", "csta_examples", "csta_montecarlo", "csta_tests"]
+resolver = "2"

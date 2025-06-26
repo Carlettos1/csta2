@@ -1,0 +1,11 @@
+[package]
+name = "csta_derive"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+
+# to not have circular dependecies:
+[dev-dependencies]
+csta = { path = "../csta" }
