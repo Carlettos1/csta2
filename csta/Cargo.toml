@@ -4,3 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+csta_core = { path = "../csta_core" }
+csta_derive = { path = "../csta_derive" }
+csta_montecarlo = { path = "../csta_montecarlo" }
+csta_metropoli = { path = "../csta_metropoli" }
+
+[features]
+default = []
+serde = ["csta_core/serde"]

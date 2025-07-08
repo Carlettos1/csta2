@@ -3,8 +3,15 @@ name = "csta_derive"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
+[lib]
+name = "csta_derive"
+proc-macro = true
 
+[dependencies]
+proc-macro2 = "=1.0"
+quote = "=1.0"
+syn = { version = "=2.0", features = ["full"] }
+rand = "=0.9"
 
 # to not have circular dependecies:
 [dev-dependencies]
