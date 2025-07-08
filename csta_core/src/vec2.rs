@@ -2,9 +2,11 @@
 //! This module provides a simple 2D vector type with basic operations.
 //!
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Vec2f64(pub f64, pub f64);
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Vec2f32(pub f32, pub f32);
 
