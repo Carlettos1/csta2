@@ -57,6 +57,7 @@ dependencies = [
 name = "csta_montecarlo"
 version = "0.1.0"
 dependencies = [
+ "csta_core",
  "rand",
 ]
 
@@ -81,8 +82,7 @@ name = "ising"
 version = "0.1.0"
 dependencies = [
  "csta",
- "serde",
- "serde_derive",
+ "rand",
 ]
 
 [[package]]

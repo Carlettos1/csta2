@@ -1,20 +1,41 @@
-use csta::Vec2f64;
-use serde_derive::{Deserialize, Serialize};
+use csta::{Vec2f64, csta_derive::Randomizable};
 
 fn main() {
-    let vec = Vec2f64::new(1.0, 1.0);
+    let ising = Ising::new(10, 10);
 }
 
-#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize)]
-pub struct A {
-    vec: Vec2f64,
-}
-
-pub enum State {
+#[derive(Randomizable, Debug, Clone, Copy)]
+pub enum Spin {
     Up,
     Down,
 }
 
-pub struct System {
-    states: Vec<Vec<State>>,
+#[derive(Randomizable, Debug)]
+pub struct Ising {
+    states: Vec<Spin>,
+    w: usize,
+    h: usize,
+}
+
+impl Spin {
+    fn flip(&mut self) {
+        match self {
+            Spin::Down => *self = Spin::Up,
+            Spin::Up => *self = Spin::Down,
+        }
+    }
+}
+
+impl Ising {
+    fn new(w: usize, h: usize) -> Ising {
+        Ising {
+            states: Vec::with_capacity(w * h),
+            w,
+            h,
+        }
+    }
+
+    fn flip(&mut self, x: usize, y: usize) {
+        self.states[x + y * self.w].flip();
+    }
 }

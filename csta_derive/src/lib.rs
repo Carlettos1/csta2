@@ -7,16 +7,18 @@ use syn::*;
 pub fn derive_randomizable(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
-    let generics = add_trait_bounds(input.generics);
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+    let generics = add_trait_bounds(input.generics);
+
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     match input.data {
         Data::Struct(data) => match data.fields {
             Fields::Named(fields) => {
                 let random_fields = parse_fields_named(&fields);
                 quote! {
                     impl #impl_generics csta::Randomizable for #name #ty_generics #where_clause {
-                        fn sample<R: rand::Rng + ?Sized>(rng: &mut R) -> Self {
+                        type Conf = ();
+                        fn sample<R: rand::Rng + ?Sized>(rng: &mut R, config: &Self::Conf) -> Self {
                             Self {
                                 #( #random_fields, )*
                             }
@@ -28,7 +30,8 @@ pub fn derive_randomizable(input: proc_macro::TokenStream) -> proc_macro::TokenS
                 let random_fields = parse_fields_unnamed(&fields);
                 quote! {
                     impl #impl_generics csta::Randomizable for #name #ty_generics #where_clause {
-                        fn sample<R: rand::Rng + ?Sized>(rng: &mut R) -> Self {
+                        type Conf = ();
+                        fn sample<R: rand::Rng + ?Sized>(rng: &mut R, config: &Self::Conf) -> Self {
                             Self(
                                 #( #random_fields, )*
                             )
@@ -39,7 +42,8 @@ pub fn derive_randomizable(input: proc_macro::TokenStream) -> proc_macro::TokenS
             Fields::Unit => {
                 quote! {
                     impl #impl_generics csta::Randomizable for #name #ty_generics #where_clause {
-                        fn sample<R: rand::Rng + ?Sized>(rng: &mut R) -> Self {
+                        type Conf = ();
+                        fn sample<R: rand::Rng + ?Sized>(rng: &mut R, config: &Self::Conf) -> Self {
                             Self
                         }
                     }
@@ -73,11 +77,12 @@ pub fn derive_randomizable(input: proc_macro::TokenStream) -> proc_macro::TokenS
             });
             quote! {
                 impl #impl_generics csta::Randomizable for #name #ty_generics #where_clause {
-                    fn sample<R: rand::Rng + ?Sized>(rng: &mut R) -> Self {
+                    type Conf = ();
+                    fn sample<R: rand::Rng + ?Sized>(rng: &mut R, config: &Self::Conf) -> Self {
                         let num = rng.gen_range(0..#num);
                         match num {
                             #( #random_variants, )*
-                            _ => panic!("Number not in range of enum"),
+                            _ => unreachable!("Number not in range of enum"),
                         }
                     }
                 }
@@ -210,7 +215,7 @@ fn parse_fields_named(fields: &FieldsNamed) -> impl Iterator<Item = TokenStream>
         let field_type = &field.ty;
         match random_type {
             RandomField::UseRandomizable => quote_spanned! {field.span()=>
-                #ident: #field_type::sample(rng)
+                #ident: #field_type::sample(rng, config)
             },
             RandomField::Range(range) => quote_spanned! {field.span()=>
                 #ident: rng.gen_range(#range)
@@ -220,7 +225,7 @@ fn parse_fields_named(fields: &FieldsNamed) -> impl Iterator<Item = TokenStream>
             },
             RandomField::Operation(mul, div, add, sub) => {
                 let mut field = quote_spanned! {field.span()=>
-                    #ident: #field_type::sample(rng)
+                    #ident: #field_type::sample(rng, config)
                 };
                 if let Some(Mul(mul)) = mul {
                     field.extend(quote_spanned! {field.span()=>
