@@ -79,6 +79,16 @@ impl Randomizable for Vec4f32 {
     }
 }
 
+impl<T> Randomizable for Vec<T>
+where
+    T: Randomizable,
+{
+    type Conf = (usize, T::Conf);
+    fn sample<R: Rng + ?Sized>(rng: &mut R, config: &Self::Conf) -> Self {
+        (0..config.0).map(|_| T::sample(rng, &config.1)).collect()
+    }
+}
+
 ///
 /// if two elements are randomizable, a tuple of both elements also will be
 macro_rules! randomize_tuple {
@@ -123,6 +133,15 @@ where
     T::Conf: Default,
 {
     fn default() -> Self {
-        Self::new(rand::rng(), T::Conf::default())
+        Self::with_config(T::Conf::default())
+    }
+}
+
+impl<T: Randomizable> MonteCarlo<T, ThreadRng> {
+    pub fn with_config(config: T::Conf) -> Self {
+        Self {
+            rng: rand::rng(),
+            config,
+        }
     }
 }
