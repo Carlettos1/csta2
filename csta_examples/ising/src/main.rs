@@ -1,7 +1,9 @@
-use csta::{Vec2f64, csta_derive::Randomizable};
+use csta::csta_derive::Randomizable;
+use rand::Rng;
 
 fn main() {
     let ising = Ising::new(10, 10);
+    println!("{:?} {:?} {:?}", ising.states, ising.w, ising.h);
 }
 
 #[derive(Randomizable, Debug, Clone, Copy)]
@@ -12,9 +14,12 @@ pub enum Spin {
 
 #[derive(Randomizable, Debug)]
 pub struct Ising {
-    states: Vec<Spin>,
+    #[csta(default = 10)]
     w: usize,
+    #[csta(range(5..10))]
     h: usize,
+    #[csta(len(w * h))]
+    states: Vec<Spin>,
 }
 
 impl Spin {
