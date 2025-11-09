@@ -109,3 +109,15 @@ enum EEnum {
     #[csta(weight = 1.0)]
     Case3(A),
 }
+
+#[derive(Randomizable)]
+struct Correlated {
+    #[csta(len(2))]
+    z: Vec<f64>,
+
+    #[csta(after({
+        let chol = [[1.0, 0.0], [0.8, 0.6]];
+        (chol[0][0] * z[0], chol[1][0] * z[0] + chol[1][1] * z[1])
+    }))]
+    assets: (f64, f64),
+}

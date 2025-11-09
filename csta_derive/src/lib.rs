@@ -384,29 +384,29 @@ fn parse_fields_named(fields: &FieldsNamed) -> (Vec<TokenStream>, Vec<TokenStrea
             CstaAttributes::Default => {
                 // Default::default() will get the earlier priority.
                 early_let_quotes.push(quote_spanned! {field.span()=>
-                    let #ident = #value
+                    let #ident: #field_type = #value
                 });
             }
             CstaAttributes::DefaultWith(_) => {
                 // These will get the second priority, so that they can use default fields
                 later_let_quotes.push(quote_spanned! {field.span()=>
-                    let #ident = #value
+                    let #ident: #field_type = #value
                 });
             }
             CstaAttributes::After(expr) => {
                 // after only works on named for now.
                 // it creates a let = T::sample, and then a let = expr;
                 later_let_quotes.push(quote_spanned! {field.span()=>
-                    let #ident = <#field_type as ::csta::Randomizable>::sample(rng)
+                    let #ident: #field_type = <#field_type as ::csta::Randomizable>::sample(rng)
                 });
                 last_let_quotes.push(quote_spanned! {field.span()=>
-                    let #ident = #expr
+                    let #ident: #field_type = #expr
                 });
             }
             _ => {
                 // These are last prio, maybe they are in order so their prio is in written order
                 last_let_quotes.push(quote_spanned! {fields.span()=>
-                    let #ident = #value
+                    let #ident: #field_type = #value
                 });
             }
         }
