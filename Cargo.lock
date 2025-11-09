@@ -16,7 +16,7 @@ checksum = "9555578bc9e57714c812a1f84e4fc5b4d21fcb063490c624de019f7464c91268"
 
 [[package]]
 name = "csta"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "csta_core",
  "csta_derive",
@@ -26,14 +26,14 @@ dependencies = [
 
 [[package]]
 name = "csta_core"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "csta_derive"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "csta",
  "proc-macro2",

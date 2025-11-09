@@ -3,6 +3,9 @@
 //!
 #![allow(dead_code)]
 #![allow(clippy::disallowed_names)]
+#![allow(clippy::upper_case_acronyms)]
+
+use std::ops::Deref;
 
 use csta::{Vec3f64, csta_derive::Randomizable};
 
@@ -120,4 +123,51 @@ struct Correlated {
         (chol[0][0] * z[0], chol[1][0] * z[0] + chol[1][1] * z[1])
     }))]
     assets: (f64, f64),
+}
+
+#[derive(Randomizable)]
+struct Prices(#[csta(default)] Vec<f64>);
+
+impl Deref for Prices {
+    type Target = Vec<f64>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Randomizable)]
+struct GBM {
+    #[csta(len(252))]
+    dw: Vec<f64>,
+
+    #[csta(after(Prices(dw.iter().scan(100.0, |s, &dw_t| {
+        *s *= (0.05/252.0 - 0.5 * 0.04/252.0 + 0.2 * (1.0/252.0_f64).sqrt() * dw_t).exp();
+        Some(*s)
+    }).collect())))]
+    prices: Prices,
+    #[csta(default = (prices.iter().any(|&p| p < 80.0)))]
+    barrier_hit: bool,
+}
+
+fn normalfn(mean: f64, std: f64) -> impl Fn(f64) -> f64 {
+    move |u| {
+        mean + std * (-2.0 * u.ln()).sqrt() * (std::f64::consts::TAU * rand::random::<f64>()).cos()
+    }
+}
+
+fn normal(x: f64, mean: f64, std: f64) -> f64 {
+    mean + std * (-2.0 * x.ln()).sqrt() * (std::f64::consts::TAU * rand::random::<f64>()).cos()
+}
+
+fn cholesky_2d(rho: f64) -> [[f64; 2]; 2] {
+    [[1.0, 0.0], [rho, (1.0 - rho * rho).sqrt()]]
+}
+
+#[derive(Randomizable)]
+struct Clean {
+    #[csta(after(normalfn(100.0, 15.0)(x)))]
+    x: f64,
+    #[csta(after(normal(x, 100.0, 15.0)))]
+    y: f64,
 }
