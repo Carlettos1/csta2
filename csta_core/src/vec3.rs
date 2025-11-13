@@ -32,7 +32,7 @@ impl Vec3f64 {
     }
 
     pub fn len_squared(&self) -> f64 {
-        self.0 * self.0 + self.1 * self.1 + self.2 * self.2
+        self.dot(self)
     }
 
     pub fn normalize(&self) -> Self {
@@ -42,6 +42,10 @@ impl Vec3f64 {
         } else {
             Vec3f64(self.0 / len, self.1 / len, self.2 / len)
         }
+    }
+
+    pub fn dot(&self, other: &Self) -> f64 {
+        self.0 * other.0 + self.1 * other.1 + self.2 * other.2
     }
 }
 
@@ -67,7 +71,7 @@ impl Vec3f32 {
     }
 
     pub fn len_squared(&self) -> f32 {
-        self.0 * self.0 + self.1 * self.1 + self.2 * self.2
+        self.dot(self)
     }
 
     pub fn normalize(&self) -> Self {
@@ -77,6 +81,10 @@ impl Vec3f32 {
         } else {
             Vec3f32(self.0 / len, self.1 / len, self.2 / len)
         }
+    }
+
+    pub fn dot(&self, other: &Self) -> f32 {
+        self.0 * other.0 + self.1 * other.1 + self.2 * other.2
     }
 }
 
@@ -198,7 +206,11 @@ macro_rules! impl_div {
             type Output = $vec;
 
             fn div(self, scalar: $float) -> Self::Output {
-                $vec(self.0 / scalar, self.1 / scalar, self.2 / scalar)
+                if scalar.is_normal() {
+                    $vec(self.0 / scalar, self.1 / scalar, self.2 / scalar)
+                } else {
+                    $vec(self.0 / scalar, self.1 / scalar, self.2 / scalar)
+                }
             }
         }
     };
@@ -208,9 +220,15 @@ macro_rules! impl_div_assign {
     ($vec:ident, $float:ident) => {
         impl std::ops::DivAssign<$float> for $vec {
             fn div_assign(&mut self, scalar: $float) {
-                self.0 /= scalar;
-                self.1 /= scalar;
-                self.2 /= scalar;
+                if scalar.is_normal() {
+                    self.0 /= scalar;
+                    self.1 /= scalar;
+                    self.2 /= scalar;
+                } else {
+                    self.0 = 0.0;
+                    self.1 = 0.0;
+                    self.2 = 0.0;
+                }
             }
         }
     };

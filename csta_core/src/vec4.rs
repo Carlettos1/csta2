@@ -35,7 +35,7 @@ impl Vec4f64 {
     }
 
     pub fn len_squared(&self) -> f64 {
-        self.0 * self.0 + self.1 * self.1 + self.2 * self.2 + self.3 * self.3
+        self.dot(self)
     }
 
     pub fn normalize(&self) -> Self {
@@ -45,6 +45,10 @@ impl Vec4f64 {
         } else {
             Vec4f64(self.0 / len, self.1 / len, self.2 / len, self.3 / len)
         }
+    }
+
+    pub fn dot(&self, other: &Self) -> f64 {
+        self.0 * other.0 + self.1 * other.1 + self.2 * other.2 + self.3 * other.3
     }
 }
 
@@ -74,7 +78,7 @@ impl Vec4f32 {
     }
 
     pub fn len_squared(&self) -> f32 {
-        self.0 * self.0 + self.1 * self.1 + self.2 * self.2 + self.3 * self.3
+        self.dot(self)
     }
 
     pub fn normalize(&self) -> Self {
@@ -84,6 +88,10 @@ impl Vec4f32 {
         } else {
             Vec4f32(self.0 / len, self.1 / len, self.2 / len, self.3 / len)
         }
+    }
+
+    pub fn dot(&self, other: &Self) -> f32 {
+        self.0 * other.0 + self.1 * other.1 + self.2 * other.2 + self.3 * other.3
     }
 }
 
@@ -223,12 +231,16 @@ macro_rules! impl_div {
             type Output = $vec;
 
             fn div(self, scalar: $float) -> Self::Output {
-                $vec(
-                    self.0 / scalar,
-                    self.1 / scalar,
-                    self.2 / scalar,
-                    self.3 / scalar,
-                )
+                if scalar.is_normal() {
+                    $vec(
+                        self.0 / scalar,
+                        self.1 / scalar,
+                        self.2 / scalar,
+                        self.3 / scalar,
+                    )
+                } else {
+                    $vec(0.0, 0.0, 0.0, 0.0)
+                }
             }
         }
     };
@@ -238,10 +250,17 @@ macro_rules! impl_div_assign {
     ($vec:ident, $float:ident) => {
         impl std::ops::DivAssign<$float> for $vec {
             fn div_assign(&mut self, scalar: $float) {
-                self.0 /= scalar;
-                self.1 /= scalar;
-                self.2 /= scalar;
-                self.3 /= scalar;
+                if scalar.is_normal() {
+                    self.0 /= scalar;
+                    self.1 /= scalar;
+                    self.2 /= scalar;
+                    self.3 /= scalar;
+                } else {
+                    self.0 = 0.0;
+                    self.1 = 0.0;
+                    self.2 = 0.0;
+                    self.3 = 0.0;
+                }
             }
         }
     };

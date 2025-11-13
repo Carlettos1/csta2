@@ -1,5 +1,4 @@
 use csta::csta_derive::Randomizable;
-use rand::Rng;
 
 fn main() {
     let ising = Ising::new(10, 10);

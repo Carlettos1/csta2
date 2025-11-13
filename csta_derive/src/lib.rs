@@ -1,6 +1,5 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned};
-use rand::distr::weighted;
 use syn::spanned::Spanned;
 use syn::*;
 
@@ -64,8 +63,6 @@ pub fn derive_randomizable(input: proc_macro::TokenStream) -> proc_macro::TokenS
                 // prob = weight / total_prob
                 // r = rng()
                 // if r < prob1 {1} else if r - prob1 < prob2 {2}
-
-                let len_variants = data.variants.len();
 
                 let probabilities = data.variants.iter().map(|variant| {
                     let enum_attributes = get_parsed_enum_attributes(variant);
@@ -510,15 +507,4 @@ fn extract_vec_inner(ty: &Type) -> Option<&Type> {
         return Some(inner_ty);
     }
     None
-}
-
-fn is_vec(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty
-        && let Some(last_segment) = type_path.path.segments.last()
-        && last_segment.ident == "Vec"
-    {
-        true
-    } else {
-        false
-    }
 }
