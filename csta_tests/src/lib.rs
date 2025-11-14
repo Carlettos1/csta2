@@ -5,6 +5,7 @@
 #![allow(clippy::disallowed_names)]
 #![allow(clippy::upper_case_acronyms)]
 
+mod lib2;
 use std::ops::Deref;
 
 use csta::{Vec3f64, csta_derive::Randomizable};
