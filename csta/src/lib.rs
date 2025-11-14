@@ -6,3 +6,5 @@ pub use csta_metropoli::*;
 pub use csta_montecarlo::*;
 
 pub use csta_derive;
+
+pub mod prelude;
