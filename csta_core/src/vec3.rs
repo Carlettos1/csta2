@@ -270,6 +270,16 @@ macro_rules! impl_neg {
     };
 }
 
+macro_rules! impl_from {
+    ($vec1:ty, $vec2:ident, $float:ident) => {
+        impl From<$vec1> for $vec2 {
+            fn from(value: $vec1) -> Self {
+                $vec2(value.0 as $float, value.0 as $float, value.0 as $float)
+            }
+        }
+    };
+}
+
 impl_from_tuple!(Vec3f64, (f64, f64, f64));
 impl_from_tuple!(Vec3f64, &(f64, f64, f64));
 
@@ -347,3 +357,8 @@ impl_div_assign!(Vec3f32, f32);
 
 impl_neg!(Vec3f32, Vec3f32);
 impl_neg!(Vec3f32, &Vec3f32);
+
+impl_from!(Vec3f32, Vec3f64, f64);
+impl_from!(&Vec3f32, Vec3f64, f64);
+impl_from!(Vec3f64, Vec3f32, f32);
+impl_from!(&Vec3f64, Vec3f32, f32);
