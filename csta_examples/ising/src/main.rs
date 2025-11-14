@@ -1,14 +1,54 @@
-use csta::csta_derive::Randomizable;
+use csta::{Metropolis, MonteCarlo, State, csta_derive::Randomizable};
+
+use crate::observables::Magnetization;
+
+mod observables;
 
 fn main() {
-    let ising = Ising::new(10, 10);
-    println!("{:?} {:?} {:?}", ising.states, ising.w, ising.h);
+    // init montecarlo
+    let mc = MonteCarlo::<Ising, _>::default();
+
+    // make 10 states
+    mc.take(10).enumerate().for_each(|(i, ising)| {
+        // init metropolis
+        let mut metropolis = Metropolis::with_state(ising, (i as f64 + 1.0) / 5.0, 2_000);
+
+        // running 1 observer
+        let magnetizations = metropolis.run_with::<Magnetization>();
+
+        // running 2 observers
+        metropolis.run_with_2::<Magnetization, Magnetization>();
+
+        // running n observers
+        metropolis.run_with_n(vec![
+            Box::new(Magnetization),
+            Box::new(Magnetization),
+            Box::new(Magnetization),
+            Box::new(Magnetization),
+            Box::new(Magnetization),
+            Box::new(Magnetization),
+        ]);
+
+        // show first 1 observer results
+        println!("{:?}", magnetizations);
+    });
 }
 
-#[derive(Randomizable, Debug, Clone, Copy)]
+#[derive(Randomizable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Spin {
     Up,
     Down,
+}
+
+#[derive(Debug, Clone)]
+pub struct IsingParams {
+    j: f64,
+}
+
+impl Default for IsingParams {
+    fn default() -> Self {
+        IsingParams { j: 2.0 }
+    }
 }
 
 #[derive(Randomizable, Debug)]
@@ -18,7 +58,7 @@ pub struct Ising {
     #[csta(range(5..10))]
     h: usize,
     #[csta(len(w * h))]
-    states: Vec<Spin>,
+    pub states: Vec<Spin>,
 }
 
 impl Spin {
@@ -28,18 +68,37 @@ impl Spin {
             Spin::Up => *self = Spin::Down,
         }
     }
+
+    fn mul(&self, other: &Self) -> f64 {
+        if self == other { 1.0 } else { -1.0 }
+    }
 }
 
-impl Ising {
-    fn new(w: usize, h: usize) -> Ising {
-        Ising {
-            states: Vec::with_capacity(w * h),
-            w,
-            h,
-        }
+impl State for Ising {
+    type Change = usize;
+    type Params = IsingParams;
+
+    fn propose_change(&self, rng: &mut impl rand::Rng) -> Self::Change {
+        rng.random_range(0..self.w * self.h)
     }
 
-    fn flip(&mut self, x: usize, y: usize) {
-        self.states[x + y * self.w].flip();
+    fn apply_change(&mut self, change: Self::Change) {
+        self.states[change].flip();
+    }
+
+    fn revert_change(&mut self, change: Self::Change) {
+        self.states[change].flip();
+    }
+
+    fn energy(&self, params: &mut Self::Params) -> f64 {
+        let mut energy = 0.0;
+        for i in 0..self.w * self.h {
+            for j in [i + 1, i - 1, i + self.w, i - self.w] {
+                if let Some(other) = self.states.get(j) {
+                    energy -= params.j * self.states[i].mul(other);
+                }
+            }
+        }
+        energy
     }
 }
