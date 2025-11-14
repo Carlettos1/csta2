@@ -2,6 +2,7 @@ pub use csta_core::vec2::*;
 pub use csta_core::vec3::*;
 pub use csta_core::vec4::*;
 
+pub use csta_metropoli::observer::*;
 pub use csta_metropoli::*;
 pub use csta_montecarlo::*;
 
