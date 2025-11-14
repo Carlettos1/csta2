@@ -31,6 +31,14 @@ impl Vec2f64 {
         self.dot(self)
     }
 
+    pub fn distance(&self, other: &Self) -> f64 {
+        self.distance_squared(other).sqrt()
+    }
+
+    pub fn distance_squared(&self, other: &Self) -> f64 {
+        (self - other).len_squared()
+    }
+
     pub fn normalize(&self) -> Self {
         let len = self.len();
         if len == 0.0 {
@@ -64,6 +72,14 @@ impl Vec2f32 {
 
     pub fn len_squared(&self) -> f32 {
         self.dot(self)
+    }
+
+    pub fn distance(&self, other: &Self) -> f32 {
+        self.distance_squared(other).sqrt()
+    }
+
+    pub fn distance_squared(&self, other: &Self) -> f32 {
+        (self - other).len_squared()
     }
 
     pub fn normalize(&self) -> Self {
