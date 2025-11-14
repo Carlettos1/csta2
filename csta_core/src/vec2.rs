@@ -191,6 +191,14 @@ macro_rules! impl_mul {
                 $vec(self.0 * scalar, self.1 * scalar)
             }
         }
+
+        impl std::ops::Mul<$vec1> for $float {
+            type Output = $vec;
+
+            fn mul(self, vec: $vec1) -> Self::Output {
+                $vec(vec.0 * self, vec.1 * self)
+            }
+        }
     };
 }
 
