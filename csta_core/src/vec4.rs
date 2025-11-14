@@ -48,10 +48,10 @@ impl Vec4f64 {
 
     pub fn normalize(&self) -> Self {
         let len = self.len();
-        if len == 0.0 {
-            Vec4f64(0.0, 0.0, 0.0, 0.0)
-        } else {
+        if len.is_normal() {
             Vec4f64(self.0 / len, self.1 / len, self.2 / len, self.3 / len)
+        } else {
+            Vec4f64(0.0, 0.0, 0.0, 0.0)
         }
     }
 
@@ -99,10 +99,10 @@ impl Vec4f32 {
 
     pub fn normalize(&self) -> Self {
         let len = self.len();
-        if len == 0.0 {
-            Vec4f32(0.0, 0.0, 0.0, 0.0)
-        } else {
+        if len.is_normal() {
             Vec4f32(self.0 / len, self.1 / len, self.2 / len, self.3 / len)
+        } else {
+            Vec4f32(0.0, 0.0, 0.0, 0.0)
         }
     }
 

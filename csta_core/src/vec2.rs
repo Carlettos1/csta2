@@ -41,10 +41,10 @@ impl Vec2f64 {
 
     pub fn normalize(&self) -> Self {
         let len = self.len();
-        if len == 0.0 {
-            Vec2f64(0.0, 0.0)
-        } else {
+        if len.is_normal() {
             Vec2f64(self.0 / len, self.1 / len)
+        } else {
+            Vec2f64(0.0, 0.0)
         }
     }
 
@@ -84,10 +84,10 @@ impl Vec2f32 {
 
     pub fn normalize(&self) -> Self {
         let len = self.len();
-        if len == 0.0 {
-            Vec2f32(0.0, 0.0)
-        } else {
+        if len.is_normal() {
             Vec2f32(self.0 / len, self.1 / len)
+        } else {
+            Vec2f32(0.0, 0.0)
         }
     }
 
