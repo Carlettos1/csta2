@@ -2,7 +2,10 @@
 members = ["csta", "csta_core", "csta_derive", "csta_examples", "csta_montecarlo", "csta_tests", "csta_examples/ising", "csta_metropolis"]
 resolver = "2"
 
-package.edition = "2024"
-package.authors = ["Carlos Femenias"]
-package.license = "./LICENSE"
-package.readme = "./README.md"
+[workspace.package]
+edition = "2024"
+authors = ["Carlos Femenias"]
+license = "GPL-3.0"
+license-file = "./LICENSE"
+readme = "./README.md"
+repository = "https://github.com/Carlettos1/csta2"

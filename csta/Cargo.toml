@@ -1,7 +1,12 @@
 [package]
 name = "csta"
 version = "2.0.0"
-edition = "2024"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+license-file.workspace = true
+readme.workspace = true
+repository.workspace = true
 
 [dependencies]
 csta_core = { path = "../csta_core", version = "^2.0.0" }
