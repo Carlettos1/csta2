@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 readme.workspace = true
 repository.workspace = true
+description = "Adds vec2, vec3 and vec4"
 
 [dependencies]
 serde = { version = "=1.0", optional = true, features = ["derive"] }

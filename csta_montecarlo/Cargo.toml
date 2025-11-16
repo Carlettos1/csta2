@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 readme.workspace = true
 repository.workspace = true
+description = "Adds montecarlo iterator to randomly generate instances of a randomizable struct"
 
 [dependencies]
 rand = "^0.9"
