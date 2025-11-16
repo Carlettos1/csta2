@@ -4,10 +4,10 @@ version = "2.0.0"
 edition = "2024"
 
 [dependencies]
-csta_core = { path = "../csta_core" }
-csta_derive = { path = "../csta_derive" }
-csta_montecarlo = { path = "../csta_montecarlo" }
-csta_metropoli = { path = "../csta_metropoli" }
+csta_core = { path = "../csta_core", version = "^2.0.0" }
+csta_derive = { path = "../csta_derive", version = "^2.0.0" }
+csta_montecarlo = { path = "../csta_montecarlo", version = "^2.0.0" }
+csta_metropolis = { path = "../csta_metropolis", version = "^2.0.0" }
 
 [features]
 default = []

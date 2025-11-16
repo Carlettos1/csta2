@@ -4,5 +4,5 @@ version = "2.0.0"
 edition = "2024"
 
 [dependencies]
-csta = { path = "../csta" }
+csta = { path = "../csta", version = "^2.0.0" }
 rand = "0.9"

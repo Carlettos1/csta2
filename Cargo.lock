@@ -20,7 +20,7 @@ version = "2.0.0"
 dependencies = [
  "csta_core",
  "csta_derive",
- "csta_metropoli",
+ "csta_metropolis",
  "csta_montecarlo",
 ]
 
@@ -47,7 +47,7 @@ name = "csta_examples"
 version = "2.0.0"
 
 [[package]]
-name = "csta_metropoli"
+name = "csta_metropolis"
 version = "2.0.0"
 dependencies = [
  "csta_montecarlo",

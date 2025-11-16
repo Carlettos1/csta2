@@ -1,5 +1,5 @@
 [workspace]
-members = ["csta", "csta_core", "csta_derive", "csta_examples", "csta_montecarlo", "csta_tests", "csta_examples/ising", "csta_metropoli"]
+members = ["csta", "csta_core", "csta_derive", "csta_examples", "csta_montecarlo", "csta_tests", "csta_examples/ising", "csta_metropolis"]
 resolver = "2"
 
 package.edition = "2024"
