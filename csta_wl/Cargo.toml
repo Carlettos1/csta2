@@ -1,0 +1,11 @@
+[package]
+name = "csta_wl"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+
+[dependencies]
+cstawl = { version = "0.1.0", path = "../../cstawl" }

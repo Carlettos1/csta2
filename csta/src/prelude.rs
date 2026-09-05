@@ -7,3 +7,4 @@ pub use csta_metropolis::*;
 pub use csta_montecarlo::*;
 
 pub use csta_derive;
+pub use csta_wl as wl;
