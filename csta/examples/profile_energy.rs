@@ -1,6 +1,6 @@
 //! A repeatable local microbenchmark, not a timing-sensitive unit test.
 //! cargo run --release --example profile_energy
-use csta_wl::{models::Ising, State};
+use csta_wl::{State, models::Ising};
 use std::{hint::black_box, time::Instant};
 
 fn main() {

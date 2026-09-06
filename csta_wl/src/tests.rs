@@ -1,7 +1,4 @@
-use std::{
-    convert::Infallible,
-    ops::{Deref, DerefMut},
-};
+use std::convert::Infallible;
 
 use super::*;
 use rand::{Rng, RngExt, SeedableRng, TryRng, rngs::StdRng};

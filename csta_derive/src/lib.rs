@@ -70,7 +70,7 @@ pub fn derive_randomizable(input: proc_macro::TokenStream) -> proc_macro::TokenS
                     let weight = match &enum_attributes[0] {
                         CstaEnumAttributes::Weighted(float) => float,
                     };
-                    
+
                     quote_spanned! {variant.span()=>
                         #weight
                     }

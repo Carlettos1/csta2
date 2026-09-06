@@ -8,6 +8,7 @@ fn main() {
             let mut metropoli = Metropolis::with_state(s, 1.5, 1000);
             metropoli.run_empty();
         });
+    using_smth()
 }
 
 #[derive(Debug, Randomizable)]

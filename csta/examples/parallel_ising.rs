@@ -1,7 +1,7 @@
 use csta_wl::{
-    models::Ising, run_parallel, sample_in_support, Config, ParallelConfig, RawWangLandauData,
+    Config, ParallelConfig, RawWangLandauData, models::Ising, run_parallel, sample_in_support,
 };
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{SeedableRng, rngs::StdRng};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let grid = Ising::<8>::grid()?;
