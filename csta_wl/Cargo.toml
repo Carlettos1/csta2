@@ -1,11 +1,17 @@
 [package]
 name = "csta_wl"
-version = "0.1.0"
+version.workspace = true
+rust-version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
 repository.workspace = true
+description = "Adds Wang-Landau algorithm."
+keywords = ["monte-carlo", "random"]
 
 [dependencies]
-cstawl = { version = "0.1.0", path = "../../cstawl" }
+csta_metropolis = { version = "^3.0.0", path = "../csta_metropolis" }
+csta_montecarlo = { version = "^3.0.0", path = "../csta_montecarlo" }
+rand = "=0.10.2"
+rayon = "1.11.0"

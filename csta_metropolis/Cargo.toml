@@ -1,13 +1,15 @@
 [package]
 name = "csta_metropolis"
-version = "2.0.0"
+version.workspace = true
+rust-version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
 repository.workspace = true
 description = "Adds metropolis and compatibility with montecarlo"
+keywords = ["metropolis"]
 
 [dependencies]
-csta_montecarlo = { path = "../csta_montecarlo", version = "^2.0.0" }
-rand = "^0.9"
+csta_montecarlo = { path = "../csta_montecarlo", version = "^3.0.0" }
+rand = "=0.10.2"

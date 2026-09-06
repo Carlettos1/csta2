@@ -12,62 +12,62 @@ use csta_core::{
 /// MCIter is removed and now MonteCarlo is an iterator
 /// as it was always used as such
 ///  
-use rand::{Rng, rngs::ThreadRng};
+use rand::{RngExt, rngs::ThreadRng};
 
 pub trait Randomizable {
-    fn sample<R: Rng + ?Sized>(rng: &mut R) -> Self;
+    fn sample<R: RngExt + ?Sized>(rng: &mut R) -> Self;
 }
 
 #[derive(Debug)]
-pub struct MonteCarlo<T: Randomizable, R: Rng> {
+pub struct MonteCarlo<T: Randomizable, R: RngExt> {
     rng: R,
     phantom: PhantomData<T>,
 }
 
 impl Randomizable for f64 {
-    fn sample<R: Rng + ?Sized>(rng: &mut R) -> Self {
+    fn sample<R: RngExt + ?Sized>(rng: &mut R) -> Self {
         rng.random()
     }
 }
 
 impl Randomizable for f32 {
-    fn sample<R: Rng + ?Sized>(rng: &mut R) -> Self {
+    fn sample<R: RngExt + ?Sized>(rng: &mut R) -> Self {
         rng.random()
     }
 }
 
 impl Randomizable for Vec2f64 {
-    fn sample<R: Rng + ?Sized>(rng: &mut R) -> Self {
+    fn sample<R: RngExt + ?Sized>(rng: &mut R) -> Self {
         Vec2f64(rng.random(), rng.random())
     }
 }
 
 impl Randomizable for Vec2f32 {
-    fn sample<R: Rng + ?Sized>(rng: &mut R) -> Self {
+    fn sample<R: RngExt + ?Sized>(rng: &mut R) -> Self {
         Vec2f32(rng.random(), rng.random())
     }
 }
 
 impl Randomizable for Vec3f64 {
-    fn sample<R: Rng + ?Sized>(rng: &mut R) -> Self {
+    fn sample<R: RngExt + ?Sized>(rng: &mut R) -> Self {
         Vec3f64(rng.random(), rng.random(), rng.random())
     }
 }
 
 impl Randomizable for Vec3f32 {
-    fn sample<R: Rng + ?Sized>(rng: &mut R) -> Self {
+    fn sample<R: RngExt + ?Sized>(rng: &mut R) -> Self {
         Vec3f32(rng.random(), rng.random(), rng.random())
     }
 }
 
 impl Randomizable for Vec4f64 {
-    fn sample<R: Rng + ?Sized>(rng: &mut R) -> Self {
+    fn sample<R: RngExt + ?Sized>(rng: &mut R) -> Self {
         Vec4f64(rng.random(), rng.random(), rng.random(), rng.random())
     }
 }
 
 impl Randomizable for Vec4f32 {
-    fn sample<R: Rng + ?Sized>(rng: &mut R) -> Self {
+    fn sample<R: RngExt + ?Sized>(rng: &mut R) -> Self {
         Vec4f32(rng.random(), rng.random(), rng.random(), rng.random())
     }
 }
@@ -80,7 +80,7 @@ macro_rules! randomize_tuple {
         where
             $($t: Randomizable,)+
         {
-            fn sample<R: Rng + ?Sized>(rng: &mut R) -> Self {
+            fn sample<R: RngExt + ?Sized>(rng: &mut R) -> Self {
                 ( $( <$t>::sample(rng), )+ )
             }
         }
@@ -95,7 +95,7 @@ randomize_tuple! {A, B, C, D, E, F}
 randomize_tuple! {A, B, C, D, E, F, G}
 randomize_tuple! {A, B, C, D, E, F, G, H}
 
-impl<T: Randomizable, R: Rng> MonteCarlo<T, R> {
+impl<T: Randomizable, R: RngExt> MonteCarlo<T, R> {
     #[warn(unused_must_use)]
     pub fn new(rng: R) -> Self {
         Self {
@@ -105,7 +105,7 @@ impl<T: Randomizable, R: Rng> MonteCarlo<T, R> {
     }
 }
 
-impl<T: Randomizable, R: Rng> Iterator for MonteCarlo<T, R> {
+impl<T: Randomizable, R: RngExt> Iterator for MonteCarlo<T, R> {
     type Item = T;
     fn next(&mut self) -> Option<Self::Item> {
         Some(<T>::sample(&mut self.rng))

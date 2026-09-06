@@ -1,7 +1,7 @@
 //! This module is for metropoli + montecarlo simulations
 
 use crate::observer::*;
-use rand::{Rng, rngs::ThreadRng};
+use rand::{RngExt, rngs::ThreadRng};
 
 pub mod observer;
 
@@ -15,12 +15,12 @@ pub trait State {
     // type ModificationError
 
     fn energy(&self, params: &mut Self::Params) -> f64;
-    fn propose_change(&self, rng: &mut impl Rng) -> Self::Change;
+    fn propose_change(&self, rng: &mut impl RngExt) -> Self::Change;
     fn apply_change(&mut self, change: Self::Change) /* -> ModificationError */;
     fn revert_change(&mut self, change: Self::Change) /* -> ModificationError */;
 }
 
-pub struct Metropolis<S: State, R: Rng> {
+pub struct Metropolis<S: State, R: RngExt> {
     pub state: S,
     pub params: S::Params,
     pub beta: f64,
@@ -71,7 +71,7 @@ impl<S, R> Metropolis<S, R>
 where
     S: State,
     S::Params: Default,
-    R: Rng,
+    R: RngExt,
 {
     pub fn with_state_rng(state: S, beta: f64, steps: usize, rng: R) -> Self {
         Self::with_all(state, S::Params::default(), beta, steps, rng)
@@ -86,7 +86,7 @@ impl<S, R> Metropolis<S, R>
 where
     S: State + Default,
     S::Params: Default,
-    R: Rng,
+    R: RngExt,
 {
     pub fn with_rng(beta: f64, steps: usize, rng: R) -> Self {
         Self::with_all(S::default(), S::Params::default(), beta, steps, rng)
@@ -97,7 +97,7 @@ where
     }
 }
 
-impl<S: State, R: Rng> Metropolis<S, R> {
+impl<S: State, R: RngExt> Metropolis<S, R> {
     pub fn with_all(state: S, params: S::Params, beta: f64, steps: usize, rng: R) -> Self {
         Self {
             state,

@@ -3,18 +3,17 @@ members = [
     "csta",
     "csta_core",
     "csta_derive",
-    "csta_examples",
     "csta_montecarlo",
-    "csta_tests",
-    "csta_examples/ising",
     "csta_metropolis",
     "csta_wl",
 ]
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 edition = "2024"
 authors = ["Carlos Femenias"]
 license = "GPL-3.0-or-later"
 readme = "./README.md"
+version = "3.0.0"
+rust-version = "1.98.0"
 repository = "https://github.com/Carlettos1/csta2"

@@ -17,7 +17,7 @@ pub fn derive_randomizable(input: proc_macro::TokenStream) -> proc_macro::TokenS
                 quote! {
                     impl #impl_generics csta::Randomizable for #name #ty_generics #where_clause {
                         #[allow(unused)]
-                        fn sample<R: rand::Rng + ?Sized>(rng: &mut R) -> Self {
+                        fn sample<R: rand::RngExt + ?Sized>(rng: &mut R) -> Self {
                             #( #let_quotes; )*
                             Self {
                                 #( #field_quotes, )*
@@ -30,7 +30,7 @@ pub fn derive_randomizable(input: proc_macro::TokenStream) -> proc_macro::TokenS
                 let random_fields = parse_fields_unnamed(&fields);
                 quote! {
                     impl #impl_generics csta::Randomizable for #name #ty_generics #where_clause {
-                        fn sample<R: rand::Rng + ?Sized>(rng: &mut R) -> Self {
+                        fn sample<R: rand::RngExt + ?Sized>(rng: &mut R) -> Self {
                             Self(
                                 #( #random_fields, )*
                             )
@@ -41,7 +41,7 @@ pub fn derive_randomizable(input: proc_macro::TokenStream) -> proc_macro::TokenS
             Fields::Unit => {
                 quote! {
                     impl #impl_generics csta::Randomizable for #name #ty_generics #where_clause {
-                        fn sample<R: rand::Rng + ?Sized>(rng: &mut R) -> Self {
+                        fn sample<R: rand::RngExt + ?Sized>(rng: &mut R) -> Self {
                             Self
                         }
                     }
@@ -124,7 +124,7 @@ pub fn derive_randomizable(input: proc_macro::TokenStream) -> proc_macro::TokenS
                 quote! {
                     impl #impl_generics csta::Randomizable for #name #ty_generics #where_clause {
                         #[allow(unused)]
-                        fn sample<R: rand::Rng + ?Sized>(rng: &mut R) -> Self {
+                        fn sample<R: rand::RngExt + ?Sized>(rng: &mut R) -> Self {
                             let total_probability = #prob_sum;
                             if total_probability == 0.0 {
                                 return #default;
@@ -170,7 +170,7 @@ pub fn derive_randomizable(input: proc_macro::TokenStream) -> proc_macro::TokenS
                 quote! {
                     impl #impl_generics csta::Randomizable for #name #ty_generics #where_clause {
                         #[allow(unused)]
-                        fn sample<R: rand::Rng + ?Sized>(rng: &mut R) -> Self {
+                        fn sample<R: rand::RngExt + ?Sized>(rng: &mut R) -> Self {
                             let num = rng.random_range(0..#num);
                             match num {
                                 #( #random_variants, )*

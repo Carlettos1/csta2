@@ -1,5 +1,5 @@
 use csta::{csta_derive::Randomizable, prelude::*};
-use rand::rngs::ThreadRng;
+use rand::{RngExt, rngs::ThreadRng};
 
 fn main() {
     MonteCarlo::<Something, _>::default()
@@ -40,11 +40,11 @@ impl State for Something {
     }
 }
 
-struct Algo {
+struct Smth {
     metropolis: Metropolis<Something, ThreadRng>,
 }
 
-impl State for Algo {
+impl State for Smth {
     type Change = f64;
     type Params = ();
 
@@ -65,17 +65,17 @@ impl State for Algo {
     }
 }
 
-impl Randomizable for Algo {
+impl Randomizable for Smth {
     fn sample<R: rand::Rng + ?Sized>(_rng: &mut R) -> Self {
         let mut rng = rand::rng();
-        Algo {
+        Smth {
             metropolis: Metropolis::with_all(Something::sample(&mut rng), (), 1.5, 1_000, rng),
         }
     }
 }
 
-fn using_algo() {
-    MonteCarlo::<Algo, _>::default().take(10).for_each(|algo| {
+fn using_smth() {
+    MonteCarlo::<Smth, _>::default().take(10).for_each(|algo| {
         let beta = algo.metropolis.beta;
         let mut metropolis = Metropolis::with_state(algo, beta, 100);
         metropolis.run_empty();
