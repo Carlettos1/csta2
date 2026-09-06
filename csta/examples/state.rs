@@ -1,84 +1,77 @@
-use csta::{csta_derive::Randomizable, prelude::*};
-use rand::{RngExt, rngs::ThreadRng};
+//! A minimal reversible model: two levels E=0 and E=1, k_b=1.
+use csta::{
+    Metropolis, MonteCarlo, Schedule, State, csta_derive::Randomizable, statistics::Blocking,
+};
+use rand::{RngExt, SeedableRng, rngs::StdRng};
 
-fn main() {
-    MonteCarlo::<Something, _>::default()
-        .take(10)
-        .for_each(|s| {
-            let mut metropoli = Metropolis::with_state(s, 1.5, 1000);
-            metropoli.run_empty();
-        });
-    using_smth()
+#[derive(Clone, Copy, Debug, PartialEq, Randomizable)]
+enum Spin {
+    Down,
+    Up,
 }
-
-#[derive(Debug, Randomizable)]
-struct BoolState(#[csta(default)] bool);
-
-#[derive(Debug, Randomizable)]
-struct Something {
-    #[csta(after(BoolState(rng.random_bool(0.5))))]
-    state: BoolState,
+#[derive(Clone, Debug, Randomizable)]
+struct TwoLevel {
+    spin: Spin,
 }
-
-impl State for Something {
+impl State for TwoLevel {
     type Params = ();
-    type Change = bool;
-
-    fn energy(&self, _params: &mut Self::Params) -> f64 {
-        if self.state.0 { -1.0 } else { 1.0 }
+    // Keep the original value so self-loops and nontrivial changes both revert exactly.
+    type Change = (Spin, Spin);
+    fn energy(&self, _: &mut ()) -> f64 {
+        f64::from(self.spin == Spin::Up)
     }
-
-    fn propose_change(&self, rng: &mut impl rand::Rng) -> Self::Change {
-        rng.random_bool(0.5)
+    fn propose_change(&self, rng: &mut impl RngExt) -> Self::Change {
+        (
+            self.spin,
+            if rng.random_bool(0.5) {
+                Spin::Up
+            } else {
+                Spin::Down
+            },
+        )
     }
-
-    fn apply_change(&mut self, change: Self::Change) {
-        self.state.0 = change;
+    fn apply_change(&mut self, (_, next): Self::Change) {
+        self.spin = next;
     }
-
-    fn revert_change(&mut self, change: Self::Change) {
-        self.state.0 = !change;
-    }
-}
-
-struct Smth {
-    metropolis: Metropolis<Something, ThreadRng>,
-}
-
-impl State for Smth {
-    type Change = f64;
-    type Params = ();
-
-    fn propose_change(&self, rng: &mut impl rand::Rng) -> Self::Change {
-        rng.random::<f64>()
-    }
-
-    fn apply_change(&mut self, change: Self::Change) {
-        self.metropolis.beta += change;
-    }
-
-    fn revert_change(&mut self, change: Self::Change) {
-        self.metropolis.beta -= change;
-    }
-
-    fn energy(&self, params: &mut Self::Params) -> f64 {
-        self.metropolis.state.energy(params)
+    fn revert_change(&mut self, (old, _): Self::Change) {
+        self.spin = old;
     }
 }
-
-impl Randomizable for Smth {
-    fn sample<R: rand::Rng + ?Sized>(_rng: &mut R) -> Self {
-        let mut rng = rand::rng();
-        Smth {
-            metropolis: Metropolis::with_all(Something::sample(&mut rng), (), 1.5, 1_000, rng),
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let initial = MonteCarlo::<TwoLevel, _>::new(StdRng::seed_from_u64(42));
+    for (seed, state) in initial.take(3).enumerate() {
+        let mut sampler =
+            Metropolis::with_all(state, (), 1.0, 21_000, StdRng::seed_from_u64(seed as u64));
+        let mut energy = Blocking::new(64)?;
+        sampler.try_run_observed(
+            Schedule {
+                burn_in: 1000,
+                stride: 1,
+            },
+            None,
+            |s, _| energy.push(s.energy(&mut ())),
+        )?;
+        println!(
+            "seed={seed}, mean energy={:?}, exact={}",
+            energy.estimate(),
+            1.0 / (1.0 + 1.0_f64.exp())
+        );
+    }
+    Ok(())
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn every_proposal_reverts_exactly() {
+        for old in [Spin::Down, Spin::Up] {
+            for next in [Spin::Down, Spin::Up] {
+                let mut s = TwoLevel { spin: old };
+                s.apply_change((old, next));
+                assert_eq!(s.spin, next);
+                s.revert_change((old, next));
+                assert_eq!(s.spin, old);
+            }
         }
     }
-}
-
-fn using_smth() {
-    MonteCarlo::<Smth, _>::default().take(10).for_each(|algo| {
-        let beta = algo.metropolis.beta;
-        let mut metropolis = Metropolis::with_state(algo, beta, 100);
-        metropolis.run_empty();
-    });
 }

@@ -120,3 +120,140 @@ where
         Self::new(rand::rng())
     }
 }
+
+/// Normal sample via Box–Muller. Zero scale returns the mean without RNG draws.
+pub fn gaussian(
+    rng: &mut (impl RngExt + ?Sized),
+    mean: f64,
+    scale: f64,
+) -> Result<f64, &'static str> {
+    if !mean.is_finite() || !scale.is_finite() || scale < 0.0 {
+        return Err("invalid Gaussian parameters");
+    }
+    if scale == 0.0 {
+        return Ok(mean);
+    }
+    let radius = (-2.0 * (1.0 - rng.random::<f64>()).ln()).sqrt();
+    let z = radius * (std::f64::consts::TAU * rng.random::<f64>()).cos();
+    let x = scale.mul_add(z, mean);
+    if x.is_finite() {
+        Ok(x)
+    } else {
+        Err("Gaussian sample overflow")
+    }
+}
+/// Uniform direction on S², with exactly two random draws and no rejection loop.
+pub fn isotropic_direction(rng: &mut (impl RngExt + ?Sized)) -> Vec3f64 {
+    let z = 2.0 * rng.random::<f64>() - 1.0;
+    let phi = std::f64::consts::TAU * rng.random::<f64>();
+    let r = (1.0 - z * z).max(0.0).sqrt();
+    Vec3f64(r * phi.cos(), r * phi.sin(), z)
+}
+
+/// Portable PCG64 with serializable state, for opt-in exact checkpoints.
+#[cfg(feature = "checkpoint")]
+pub use rand_pcg::Pcg64 as CheckpointRng;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{SeedableRng, rngs::StdRng};
+    #[test]
+    fn initialization() {
+        let mut a = StdRng::seed_from_u64(4);
+        let mut b = StdRng::seed_from_u64(4);
+        assert_eq!(gaussian(&mut a, 3.0, 0.0), Ok(3.0));
+        assert_eq!(a.random::<u64>(), b.random::<u64>());
+        for scale in [-1.0, f64::NAN, f64::INFINITY] {
+            assert!(gaussian(&mut a, 0.0, scale).is_err());
+        }
+        let mut means = [0.0; 3];
+        let mut squares = [0.0; 3];
+        let mut cross = 0.0;
+        for _ in 0..40_000 {
+            let v = isotropic_direction(&mut a);
+            assert!((v.len() - 1.0).abs() < 1e-14);
+            let x: [f64; 3] = v.into();
+            for i in 0..3 {
+                means[i] += x[i];
+                squares[i] += x[i] * x[i];
+            }
+            cross += x[0] * x[1];
+        }
+        for i in 0..3 {
+            assert!(means[i].abs() / 40_000.0 < 0.015);
+            assert!((squares[i] / 40_000.0 - 1.0 / 3.0).abs() < 0.015);
+        }
+        assert!(cross.abs() / 40_000.0 < 0.015);
+        let v: Vec<_> = MonteCarlo::<(f64, Vec3f64), _>::new(StdRng::seed_from_u64(9))
+            .take(100)
+            .collect();
+        let w: Vec<_> = MonteCarlo::<(f64, Vec3f64), _>::new(StdRng::seed_from_u64(9))
+            .take(100)
+            .collect();
+        assert_eq!(v, w);
+        for (x, v) in v {
+            assert!((0.0..1.0).contains(&x));
+            for x in <[f64; 3]>::from(v) {
+                assert!((0.0..1.0).contains(&x));
+            }
+        }
+    }
+}
+#[cfg(test)]
+mod support_tests {
+    use super::*;
+    use rand::{SeedableRng, rngs::StdRng};
+    #[test]
+    fn tuple_arities_and_no_draws_for_empty_take() {
+        #[derive(Debug, PartialEq)]
+        struct One;
+        impl Randomizable for One {
+            fn sample<R: RngExt + ?Sized>(_: &mut R) -> Self {
+                Self
+            }
+        }
+        let mut r = StdRng::seed_from_u64(12);
+        let mut reference = StdRng::seed_from_u64(12);
+        let _: Vec<f64> = MonteCarlo::new(&mut r).take(0).collect();
+        assert_eq!(r.random::<u64>(), reference.random::<u64>());
+        assert_eq!(<(One, One)>::sample(&mut r), (One, One));
+        assert_eq!(<(One, One, One)>::sample(&mut r), (One, One, One));
+        assert_eq!(<(One, One, One, One)>::sample(&mut r), (One, One, One, One));
+        assert_eq!(
+            <(One, One, One, One, One)>::sample(&mut r),
+            (One, One, One, One, One)
+        );
+        assert_eq!(
+            <(One, One, One, One, One, One)>::sample(&mut r),
+            (One, One, One, One, One, One)
+        );
+        assert_eq!(
+            <(One, One, One, One, One, One, One)>::sample(&mut r),
+            (One, One, One, One, One, One, One)
+        );
+        assert_eq!(
+            <(One, One, One, One, One, One, One, One)>::sample(&mut r),
+            (One, One, One, One, One, One, One, One)
+        );
+    }
+    #[test]
+    fn uniform_and_gaussian_moments() {
+        let mut rng = StdRng::seed_from_u64(31);
+        let mut u = 0.0;
+        let mut u2 = 0.0;
+        let mut g = 0.0;
+        let mut g2 = 0.0;
+        for _ in 0..50_000 {
+            let x = f64::sample(&mut rng);
+            let y = gaussian(&mut rng, 2.0, 3.0).unwrap();
+            u += x;
+            u2 += x * x;
+            g += y;
+            g2 += y * y;
+        }
+        assert!((u / 50_000.0 - 0.5).abs() < 0.01);
+        assert!((u2 / 50_000.0 - 1.0 / 3.0).abs() < 0.01);
+        assert!((g / 50_000.0 - 2.0).abs() < 0.08);
+        assert!((g2 / 50_000.0 - 13.0).abs() < 0.35);
+    }
+}

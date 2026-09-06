@@ -1,127 +1,48 @@
-use csta::{Metropolis, MonteCarlo, State, csta_derive::Randomizable, observer::Observer};
-use rand::RngExt;
-
-fn main() {
-    // init montecarlo
-    let mc = MonteCarlo::<Ising, _>::default();
-
-    // make 10 states
-    mc.take(10).enumerate().for_each(|(i, ising)| {
-        // init metropolis
-        let mut metropolis = Metropolis::with_state(ising, (i as f64 + 1.0) / 5.0, 2_000);
-
-        // running 1 observer
-        let magnetizations = metropolis.run_with::<Magnetization>();
-
-        // running 2 observers
-        metropolis.run_with_2::<Magnetization, Magnetization>();
-
-        // running n observers
-        metropolis.run_with_n(vec![
-            Box::new(Magnetization),
-            Box::new(Magnetization),
-            Box::new(Magnetization),
-            Box::new(Magnetization),
-            Box::new(Magnetization),
-            Box::new(Magnetization),
-        ]);
-
-        // show first 1 observer results
-        println!("{:?}", magnetizations);
-    });
-}
-
-#[derive(Randomizable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Spin {
-    Up,
-    Down,
-}
-
-#[derive(Debug, Clone)]
-pub struct IsingParams {
-    j: f64,
-}
-
-impl Default for IsingParams {
-    fn default() -> Self {
-        IsingParams { j: 2.0 }
-    }
-}
-
-#[derive(Randomizable, Debug)]
-pub struct Ising {
-    #[csta(default = 10)]
-    w: usize,
-    #[csta(range(5..10))]
-    h: usize,
-    #[csta(len(w * h))]
-    pub states: Vec<Spin>,
-}
-
-impl Spin {
-    fn flip(&mut self) {
-        match self {
-            Spin::Down => *self = Spin::Up,
-            Spin::Up => *self = Spin::Down,
-        }
-    }
-
-    fn mul(&self, other: &Self) -> f64 {
-        if self == other { 1.0 } else { -1.0 }
-    }
-}
-
-impl State for Ising {
-    type Change = usize;
-    type Params = IsingParams;
-
-    fn propose_change(&self, rng: &mut impl rand::Rng) -> Self::Change {
-        rng.random_range(0..self.w * self.h)
-    }
-
-    fn apply_change(&mut self, change: Self::Change) {
-        self.states[change].flip();
-    }
-
-    fn revert_change(&mut self, change: Self::Change) {
-        self.states[change].flip();
-    }
-
-    fn energy(&self, params: &mut Self::Params) -> f64 {
-        let mut energy = 0.0;
-        for i in 0..self.w * self.h {
-            for j in [i + 1, i - 1, i + self.w, i - self.w] {
-                if let Some(other) = self.states.get(j) {
-                    energy -= params.j * self.states[i].mul(other);
-                }
-            }
-        }
-        energy
-    }
-}
-
-pub struct Magnetization;
-
-impl Observer<Ising> for Magnetization {
-    type Observation = f64;
-
-    fn after() -> usize {
-        0 // will measure magnetization from the beggining
-    }
-
-    fn every() -> usize {
-        10 // will measure every 10 steps
-    }
-
-    fn measure(state: &Ising, _params: &<Ising as csta::State>::Params) -> Self::Observation {
-        state
-            .states
-            .iter()
-            .map(|s| match s {
-                Spin::Up => 1.0,
-                Spin::Down => -1.0,
-            })
-            .sum::<f64>()
-            / state.states.len() as f64
-    }
+//! Canonical 2D Ising: J=1, h=0, k_b=1, periodic 4x4 lattice.
+use csta::{
+    Metropolis, Schedule,
+    models::Ising2D,
+    statistics::{Blocking, Thermodynamics},
+};
+use rand::{SeedableRng, rngs::StdRng};
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut sampler = Metropolis::with_all(
+        Ising2D::aligned(4)?,
+        (),
+        0.4,
+        30_000,
+        StdRng::seed_from_u64(42),
+    );
+    let mut energy = Blocking::new(128)?;
+    let mut thermal = Thermodynamics::default();
+    let report = sampler.try_run_observed(
+        Schedule {
+            burn_in: 2000,
+            stride: 1,
+        },
+        None,
+        |s, _| {
+            let e = s.recompute_energy();
+            energy.push(e / 16.0)?;
+            thermal.push(e, s.magnetization())
+        },
+    )?;
+    println!(
+        "status={:?}, attempts={}, acceptance={:.3}",
+        report.status,
+        report.attempted,
+        sampler.accepted_rate()
+    );
+    println!(
+        "per-site thermodynamics: {:?}",
+        thermal.summary(0.4, 1.0, 16)?
+    );
+    println!(
+        "energy/site and block standard error: {:?}",
+        energy.estimate()
+    );
+    println!(
+        "Finite-size estimate; inspect mixing and increase block size before interpreting error bars."
+    );
+    Ok(())
 }

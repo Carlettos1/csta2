@@ -3,6 +3,14 @@ use crate::{EnergyGrid, Error, Randomizable, Result, State, WLData};
 use rand::RngExt;
 
 /// Periodic one-dimensional Ising chain with coupling J=1, N>=3.
+#[cfg_attr(feature = "checkpoint", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "checkpoint",
+    serde(bound(
+        serialize = "[i8; N]: serde::Serialize",
+        deserialize = "[i8; N]: serde::Deserialize<'de>"
+    ))
+)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ising<const N: usize> {
     spins: [i8; N],
@@ -62,6 +70,9 @@ impl<const N: usize> Randomizable for Ising<N> {
 impl<const N: usize> State for Ising<N> {
     type Params = ();
     type Change = (usize, i64);
+    fn valid_state(&self, _: &()) -> bool {
+        Self::new(self.spins).is_ok_and(|s| s == *self)
+    }
     fn energy(&self, _: &mut ()) -> f64 {
         self.energy as f64
     }
@@ -85,6 +96,14 @@ impl<const N: usize> State for Ising<N> {
 /// N distinguishable quantum oscillators with hbar*omega=1:
 /// E=sum(n_i+1/2), n_i>=0. A downward proposal at zero is a self-loop,
 /// preserving symmetry of every nontrivial proposal (unlike forced upward moves).
+#[cfg_attr(feature = "checkpoint", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "checkpoint",
+    serde(bound(
+        serialize = "[u32; N]: serde::Serialize",
+        deserialize = "[u32; N]: serde::Deserialize<'de>"
+    ))
+)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Oscillators<const N: usize> {
     occupation: [u32; N],
@@ -141,6 +160,9 @@ impl<const N: usize> Randomizable for Oscillators<N> {
 impl<const N: usize> State for Oscillators<N> {
     type Params = ();
     type Change = (usize, u32, u32);
+    fn valid_state(&self, _: &()) -> bool {
+        Self::new(self.occupation).is_ok_and(|s| s == *self)
+    }
     fn energy(&self, _: &mut ()) -> f64 {
         self.quanta as f64 + N as f64 * 0.5
     }

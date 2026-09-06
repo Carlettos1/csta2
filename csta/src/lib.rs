@@ -1,3 +1,4 @@
+#![doc = include_str!("../../README.md")]
 pub use csta_core::vec2::*;
 pub use csta_core::vec3::*;
 pub use csta_core::vec4::*;
@@ -11,3 +12,5 @@ pub mod prelude;
 
 /// Wang–Landau sampling, numerical analysis, and replica-exchange windows.
 pub use csta_wl as wl;
+
+pub use csta_core::{dynamics, geometry};

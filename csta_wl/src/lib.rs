@@ -1,7 +1,8 @@
 //! Checked Wang–Landau warm-up followed by SAMC, and replica-exchange windows.
 //!
 //! The SAMC counter is **trial moves**, following arXiv:2402.05653v2 Eq. (5).
-//! `State` proposals must be symmetric. `apply_change`/`revert_change` must be exact
+//! `State` proposals default to symmetric; asymmetric models supply a log proposal
+//! ratio. `apply_change`/`revert_change` must be exact
 //! inverses and model methods must terminate. Energy may cache into `Params`;
 //! rejected moves restore a cloned parameter snapshot. Clone must be independent
 //! of mutable caches (no shared interior-mutability side effects).
@@ -48,11 +49,16 @@ impl std::fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 
+#[cfg_attr(feature = "checkpoint", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct RawWangLandauData {
     grid: EnergyGrid,
 
     /// ln(g), finite on accessible bins and -infinity elsewhere.
+    #[cfg_attr(
+        feature = "checkpoint",
+        serde(with = "csta_core::checkpoint::float_bits")
+    )]
     dos: Vec<f64>,
     bins: Vec<u64>,
     lifetime_bins: Vec<u64>,
@@ -197,7 +203,8 @@ impl RawWangLandauData {
 /// Zero preliminary stages explicitly skips warm-up. Other minima must be
 /// positive. `sampling_steps` counts only SAMC proposals; zero does no work,
 /// including no warm-up. `max_steps` bounds warm-up + SAMC proposals together.
-#[derive(Clone, Debug)]
+#[cfg_attr(feature = "checkpoint", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Config {
     pub preliminary_stages: usize,
     pub min_stage_steps: u64,
@@ -262,17 +269,20 @@ impl Config {
         Ok((visits.max(self.min_stage_steps), t0, t1))
     }
 }
+#[cfg_attr(feature = "checkpoint", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {
     Preliminary,
     Sampling,
 }
+#[cfg_attr(feature = "checkpoint", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StopReason {
     TargetReached,
     BudgetExhausted,
     Cancelled,
 }
+#[cfg_attr(feature = "checkpoint", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Diagnostics {
     pub stop_reason: Option<StopReason>,
@@ -299,6 +309,14 @@ impl<S: State> RunResult<S> {
     }
 }
 
+#[cfg_attr(feature = "checkpoint", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "checkpoint",
+    serde(bound(
+        serialize = "S: serde::Serialize, S::Params: serde::Serialize, R: serde::Serialize",
+        deserialize = "S: serde::Deserialize<'de>, S::Params: serde::Deserialize<'de>, R: serde::Deserialize<'de>"
+    ))
+)]
 pub(crate) struct Walker<S: State, R> {
     state: S,
     params: S::Params,
@@ -369,8 +387,13 @@ where
     fn transition(&mut self, delta: Option<f64>) -> Result<bool> {
         let backup = self.params.clone();
         let change = self.state.propose_change(&mut self.rng);
+        let correction = self.state.log_proposal_ratio(&change);
+        if correction.is_nan() || correction == f64::INFINITY {
+            return Err(Error::Invalid("invalid proposal log ratio"));
+        }
+        let local = self.state.delta_energy(&change, &self.params);
         self.state.apply_change(change.clone());
-        let energy = self.state.energy(&mut self.params);
+        let energy = local.map_or_else(|| self.state.energy(&mut self.params), |d| self.energy + d);
         let new_bin = match self.data.energy_to_bin(energy) {
             Ok(bin) => bin,
             Err(e) => {
@@ -379,8 +402,16 @@ where
                 return Err(e);
             }
         };
-        let accepted = new_bin
-            .is_some_and(|i| accept(self.data.dos[self.bin] - self.data.dos[i], &mut self.rng));
+        let accepted = new_bin.is_some_and(|i| {
+            accept(
+                if correction == f64::NEG_INFINITY {
+                    correction
+                } else {
+                    self.data.dos[self.bin] - self.data.dos[i] + correction
+                },
+                &mut self.rng,
+            )
+        });
         // Validate the retained-bin update before committing any model changes.
         if let Some(d) = delta {
             let retained = if accepted { new_bin.unwrap() } else { self.bin };
@@ -572,5 +603,11 @@ where
     wang_landau2::<S>(target_time, sweeps, 2, 500, params, min, max, bins)
 }
 
+pub mod analysis;
+#[cfg(test)]
+mod analysis_tests;
+pub mod joint;
+mod session;
 #[cfg(test)]
 mod tests;
+pub use session::Session;

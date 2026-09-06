@@ -13,3 +13,8 @@ keywords = ["metropolis"]
 [dependencies]
 csta_montecarlo = { path = "../csta_montecarlo", version = "^3.0.0" }
 rand = "=0.10.2"
+csta_core = { path = "../csta_core", version = "^3.0.0" }
+
+serde = { version = "1.0", features = ["derive"], optional = true }
+[features]
+checkpoint = ["dep:serde", "csta_core/checkpoint", "csta_montecarlo/checkpoint"]

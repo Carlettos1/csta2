@@ -15,3 +15,8 @@ csta_metropolis = { version = "^3.0.0", path = "../csta_metropolis" }
 csta_montecarlo = { version = "^3.0.0", path = "../csta_montecarlo" }
 rand = "=0.10.2"
 rayon = "1.11.0"
+
+serde = { version = "1.0", features = ["derive"], optional = true }
+csta_core = { path = "../csta_core", version = "^3.0.0" }
+[features]
+checkpoint = ["dep:serde", "csta_core/checkpoint", "csta_metropolis/checkpoint", "csta_montecarlo/checkpoint"]

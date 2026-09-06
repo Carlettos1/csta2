@@ -13,3 +13,7 @@ keywords = ["monte-carlo", "random"]
 [dependencies]
 rand = "=0.10.2"
 csta_core = { path = "../csta_core", version = "^3.0.0" }
+
+rand_pcg = { version = "=0.10.2", optional = true, features = ["serde"] }
+[features]
+checkpoint = ["dep:rand_pcg"]

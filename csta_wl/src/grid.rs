@@ -2,6 +2,7 @@ use crate::{Error, Result};
 
 /// Shared sampling and thermodynamic energy coordinates.
 /// Interval DOS values are bin masses, not densities per unit energy.
+#[cfg_attr(feature = "checkpoint", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnergyGrid {
     energies: Vec<f64>,
@@ -9,6 +10,28 @@ pub struct EnergyGrid {
 }
 
 impl EnergyGrid {
+    #[cfg(feature = "checkpoint")]
+    pub(crate) fn validate(&self) -> Result<()> {
+        Self::discrete(self.energies.clone())?;
+        if let Some(edges) = &self.edges
+            && (edges.len() != self.len() + 1
+                || edges.iter().any(|x| !x.is_finite())
+                || edges.windows(2).any(|v| v[0] >= v[1])
+                || self
+                    .energies
+                    .iter()
+                    .enumerate()
+                    .any(|(i, e)| *e < edges[i] || *e > edges[i + 1]))
+        {
+            return Err(Error::Invalid("invalid snapshot grid"));
+        }
+        if let Some(edges) = &self.edges
+            && Self::continuous(edges[0], *edges.last().unwrap(), self.len())? != *self
+        {
+            return Err(Error::Invalid("snapshot grid centers or edges changed"));
+        }
+        Ok(())
+    }
     /// Half-open bins, except the final bin includes `max`.
     pub fn continuous(min: f64, max: f64, bins: usize) -> Result<Self> {
         if bins == 0 || !min.is_finite() || !max.is_finite() || min >= max {

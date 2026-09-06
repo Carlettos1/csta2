@@ -31,7 +31,7 @@ impl Vec4f64 {
     }
 
     pub fn len(&self) -> f64 {
-        self.len_squared().sqrt()
+        self.0.hypot(self.1).hypot(self.2).hypot(self.3)
     }
 
     pub fn len_squared(&self) -> f64 {
@@ -39,20 +39,35 @@ impl Vec4f64 {
     }
 
     pub fn distance(&self, other: &Self) -> f64 {
-        self.distance_squared(other).sqrt()
+        (self - other).len()
     }
 
     pub fn distance_squared(&self, other: &Self) -> f64 {
         (self - other).len_squared()
     }
 
+    /// Unit direction, or zero for zero/nonfinite input. Use `try_normalize`
+    /// when an undefined direction must be distinguished from the zero vector.
     pub fn normalize(&self) -> Self {
-        let len = self.len();
-        if len.is_normal() {
-            Vec4f64(self.0 / len, self.1 / len, self.2 / len, self.3 / len)
-        } else {
-            Vec4f64(0.0, 0.0, 0.0, 0.0)
+        self.try_normalize().unwrap_or_default()
+    }
+
+    pub fn try_normalize(&self) -> Option<Self> {
+        let components = [self.0, self.1, self.2, self.3];
+        if components.iter().any(|v| !v.is_finite()) {
+            return None;
         }
+        let scale = components.iter().fold(0.0_f64, |a, b| a.max(b.abs()));
+        if scale == 0.0 {
+            return None;
+        }
+        let scaled = Self(
+            self.0 / scale,
+            self.1 / scale,
+            self.2 / scale,
+            self.3 / scale,
+        );
+        Some(scaled / scaled.len())
     }
 
     pub fn dot(&self, other: &Self) -> f64 {
@@ -82,7 +97,7 @@ impl Vec4f32 {
     }
 
     pub fn len(&self) -> f32 {
-        self.len_squared().sqrt()
+        self.0.hypot(self.1).hypot(self.2).hypot(self.3)
     }
 
     pub fn len_squared(&self) -> f32 {
@@ -90,20 +105,35 @@ impl Vec4f32 {
     }
 
     pub fn distance(&self, other: &Self) -> f32 {
-        self.distance_squared(other).sqrt()
+        (self - other).len()
     }
 
     pub fn distance_squared(&self, other: &Self) -> f32 {
         (self - other).len_squared()
     }
 
+    /// Unit direction, or zero for zero/nonfinite input. Use `try_normalize`
+    /// when an undefined direction must be distinguished from the zero vector.
     pub fn normalize(&self) -> Self {
-        let len = self.len();
-        if len.is_normal() {
-            Vec4f32(self.0 / len, self.1 / len, self.2 / len, self.3 / len)
-        } else {
-            Vec4f32(0.0, 0.0, 0.0, 0.0)
+        self.try_normalize().unwrap_or_default()
+    }
+
+    pub fn try_normalize(&self) -> Option<Self> {
+        let components = [self.0, self.1, self.2, self.3];
+        if components.iter().any(|v| !v.is_finite()) {
+            return None;
         }
+        let scale = components.iter().fold(0.0_f32, |a, b| a.max(b.abs()));
+        if scale == 0.0 {
+            return None;
+        }
+        let scaled = Self(
+            self.0 / scale,
+            self.1 / scale,
+            self.2 / scale,
+            self.3 / scale,
+        );
+        Some(scaled / scaled.len())
     }
 
     pub fn dot(&self, other: &Self) -> f32 {
@@ -255,16 +285,12 @@ macro_rules! impl_div {
             type Output = $vec;
 
             fn div(self, scalar: $float) -> Self::Output {
-                if scalar.is_normal() {
-                    $vec(
-                        self.0 / scalar,
-                        self.1 / scalar,
-                        self.2 / scalar,
-                        self.3 / scalar,
-                    )
-                } else {
-                    $vec(0.0, 0.0, 0.0, 0.0)
-                }
+                $vec(
+                    self.0 / scalar,
+                    self.1 / scalar,
+                    self.2 / scalar,
+                    self.3 / scalar,
+                )
             }
         }
     };
@@ -274,17 +300,10 @@ macro_rules! impl_div_assign {
     ($vec:ident, $float:ident) => {
         impl std::ops::DivAssign<$float> for $vec {
             fn div_assign(&mut self, scalar: $float) {
-                if scalar.is_normal() {
-                    self.0 /= scalar;
-                    self.1 /= scalar;
-                    self.2 /= scalar;
-                    self.3 /= scalar;
-                } else {
-                    self.0 = 0.0;
-                    self.1 = 0.0;
-                    self.2 = 0.0;
-                    self.3 = 0.0;
-                }
+                self.0 /= scalar;
+                self.1 /= scalar;
+                self.2 /= scalar;
+                self.3 /= scalar;
             }
         }
     };
@@ -308,9 +327,9 @@ macro_rules! impl_from {
             fn from(value: $vec1) -> Self {
                 $vec2(
                     value.0 as $float,
-                    value.0 as $float,
-                    value.0 as $float,
-                    value.0 as $float,
+                    value.1 as $float,
+                    value.2 as $float,
+                    value.3 as $float,
                 )
             }
         }

@@ -20,6 +20,8 @@ csta_wl = { path = "../csta_wl", version = "^3.0.0" }
 [features]
 default = []
 serde = ["csta_core/serde"]
+checkpoint = ["csta_core/checkpoint", "csta_metropolis/checkpoint", "csta_montecarlo/checkpoint", "csta_wl/checkpoint"]
 
 [dev-dependencies]
+serde_json = { version = "1.0", features = ["float_roundtrip"] }
 rand = "=0.10.2"

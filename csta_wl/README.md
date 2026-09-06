@@ -1,19 +1,17 @@
 # CSTA Wang–Landau
 
 Wang–Landau preliminary refinement, SAMC production sampling, and parallel
-replica-exchange energy windows. The implementation lives in this directory;
-`../cstav2/csta_wl` exposes it to the workspace as `csta::wl`.
+replica-exchange energy windows. The implementation lives in this workspace crate and is exposed as `csta::wl`.
 
 ## References and algorithm choices
 
 - [Moreno, Peralta and Davis, arXiv:2103.15028v2](https://arxiv.org/abs/2103.15028v2),
   section 2 and Eq. (4): overlapping windows, frozen-DOS walkers after local
   completion, replica exchanges, and joining at the smallest entropy-slope
-  mismatch. The supplied [PDF](2103.15028v2.pdf) and `rwl/window.py`, `rwl/wl.py`,
-  `rwl/src/simulator.cpp`, and `rwl/src/qho.cpp` were used as references.
+  mismatch. See the linked paper for the window-exchange and stitching construction.
 - [Shakirov, arXiv:2402.05653v2](https://arxiv.org/abs/2402.05653v2), Eqs. (1), (3),
   and (5): bin-DOS acceptance and the SAMC update `gamma(t) = t0 / (t1 + t)`.
-  The supplied [PDF](2402.05653v2.pdf) defines `t` as trial moves. The old Rust
+  The linked paper defines `t` as trial moves. The old Rust
   implementation incorrectly used visits divided by the number of bins here.
 
 This implements the combination needed by this project, not every extension in
@@ -68,8 +66,10 @@ unbounded search for a rare energy window.
 
 Contracts:
 
-- Proposals must be **symmetric**. Asymmetric proposals/Hastings corrections are
-  not supported. `apply_change` and `revert_change` must be exact inverses.
+- Proposals are symmetric by default. Asymmetric models must override
+  `State::log_proposal_ratio` or use `csta::Hastings`, supplying log(q(reverse)/q(forward))
+  before applying the change. Negative infinity rejects, while NaN and positive
+  infinity are errors. `apply_change` and `revert_change` must be exact inverses.
 - The physical Hamiltonian parameters stay fixed during sampling. `energy` may
   refresh caches in `Params`; `Params: Clone` provides an independent snapshot
   restored on rejection. A clone must not share mutable caches or model state.
@@ -145,7 +145,7 @@ Both models cache energy, with exact apply/revert updates.
 
 ## Parallel API
 
-See [examples/parallel_ising.rs](examples/parallel_ising.rs).
+See [parallel_ising.rs](../csta/examples/parallel_ising.rs).
 
 `run_parallel` (also exported as `par_wl`) takes a shared global grid, a vector of
 initial states, common Hamiltonian parameters, `ParallelConfig`, and an optional
@@ -197,7 +197,7 @@ partial results under asynchronous external cancellation.
 ## API migration and workspace integration
 
 This is a checked API revision, not source-compatible with the old prototype.
-Package versions have not been released or bumped to v3.
+Workspace manifests specify version 3.0.0; this is not a release announcement.
 
 | Old use | Replacement |
 | --- | --- |
@@ -221,24 +221,43 @@ csta -> csta_wl -> csta_metropolis / csta_montecarlo
 ```
 
 Path dependencies ensure CSTA and WL share the same `State`/`Randomizable` traits.
-`csta::wl` and `csta::prelude::wl` expose the module. The workspace shim avoids a
-second copy of the algorithm; this is the integration point for the planned v3.
-The sibling `wang-landau` copy and the validated social-model use cases are not
-modified by this implementation.
+`csta::wl` and `csta::prelude::wl` expose this crate directly.
+
+## Incremental and optional APIs
+
+`Session::new` accepts the same model/RNG/data/config inputs as `run`. Call
+`advance(proposals, cancel)` to do bounded work, or `advance_observed` to collect
+conditional observables from retained production states; inspect `diagnostics()` and call
+`finish()` for a result. `ParallelSession` advances complete exchange chunks.
+Both preserve adaptation and RNG state across calls. With the optional
+`checkpoint` feature and serializable models/RNGs, `save`/`load` preserve exact
+continuation; see the [workspace README](../README.md#reproducibility-and-checkpoints).
+
+`analysis::ConditionalMoments` records an observable and its square in energy
+bins, then evaluates them with a compatible DOS. Missing finite support is an
+error. `analysis::reweight` provides canonical single-histogram reweighting and
+weight-concentration diagnostics. `analysis::DosEnsemble` evaluates uncertainty
+across caller-declared independent completed experiments after normalization.
+Interacting replicas must not be labeled independent experiments.
+
+`joint::JointGrid` declares sparse finite (field-free energy, magnetization)
+support with a cell budget. `run_joint` uses the same checked WL/SAMC schedule;
+`JointDos::evaluate(beta, field)` computes field-dependent thermodynamics and
+`energy_marginal` recovers the field-free energy DOS. Check `is_complete()` on
+joint run results before interpreting their data.
 
 ## Verification
 
-From this directory:
+From the workspace root:
 
 ```sh
-cargo test --offline
-cargo clippy --offline --all-targets -- -D warnings
-cargo test --offline --release -- --ignored
-cargo run --offline --release
-cargo run --offline --release -- qho
-cargo run --offline --release --example parallel_ising
-cargo run --offline --release --example profile_energy
-cargo test --offline --manifest-path ../cstav2/Cargo.toml --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test -p csta_wl --release -- --ignored
+cargo run -p csta_wl --release
+cargo run -p csta_wl --release -- qho
+cargo run -p csta --release --example parallel_ising
+cargo run -p csta --release --example profile_energy
 ```
 
 Tests cover deterministic transition/grid/counting failures, exact DOS

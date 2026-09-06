@@ -8,7 +8,8 @@ use std::{
     panic::{AssertUnwindSafe, catch_unwind},
 };
 
-#[derive(Clone, Debug)]
+#[cfg_attr(feature = "checkpoint", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ParallelConfig {
     /// Ordered half-open GLOBAL BIN ranges on a shared grid. Cover the grid;
     /// adjacent windows must overlap in at least two bins and extend coverage.
@@ -85,52 +86,134 @@ where
     S: State + Send,
     S::Params: Clone + Send,
 {
-    config.validate(grid.len())?;
-    let count = config.windows.len() * config.walkers_per_window;
-    if states.len() != count {
-        return Err(Error::Invalid("one initial state is required per walker"));
-    }
-    // Split seeds before scheduling; neither scheduling nor thread IDs affect RNG.
-    let mut seed_rng = StdRng::seed_from_u64(config.seed);
-    let mut walkers = Vec::with_capacity(count);
-    for (i, state) in states.into_iter().enumerate() {
-        let range = &config.windows[i / config.walkers_per_window];
-        let mask: Vec<_> = (0..grid.len()).map(|b| range.contains(&b)).collect();
-        let dos = mask
-            .iter()
-            .map(|a| if *a { 0.0 } else { f64::NEG_INFINITY })
-            .collect();
-        let data = RawWangLandauData::with_support(grid.clone(), mask, dos)?;
-        let rng = StdRng::seed_from_u64(seed_rng.random());
-        let walker = catch_unwind(AssertUnwindSafe(|| {
-            Walker::new(state, params.clone(), rng, data, config.run.clone())
-        }))
-        .map_err(|_| Error::WorkerFailed)??;
-        walkers.push(walker);
-    }
-    let mut exchange_rng = StdRng::seed_from_u64(seed_rng.random());
-    let failed = AtomicBool::new(false);
-    let mut parity = 0;
-    let mut exchange_attempts = 0_u64;
-    let mut accepted_exchanges = 0_u64;
-    let stop_reason = loop {
-        if cancelled(cancel) {
-            break StopReason::Cancelled;
+    let mut session = ParallelSession::<S, StdRng>::new(grid, states, params, config)?;
+    session.advance(u64::MAX, cancel)?;
+    session.finish()
+}
+
+/// Incremental parallel execution. Checkpoints are taken between complete chunks,
+/// after deterministic exchanges; default RNG matches `run_parallel`.
+#[cfg_attr(feature = "checkpoint", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "checkpoint",
+    serde(bound(
+        serialize = "S: serde::Serialize, S::Params: serde::Serialize, R: serde::Serialize",
+        deserialize = "S: serde::Deserialize<'de>, S::Params: serde::Deserialize<'de>, R: serde::Deserialize<'de>"
+    ))
+)]
+pub struct ParallelSession<S: State, R = StdRng> {
+    walkers: Vec<Walker<S, R>>,
+    exchange_rng: R,
+    config: ParallelConfig,
+    parity: usize,
+    exchange_attempts: u64,
+    accepted_exchanges: u64,
+    stop_reason: Option<StopReason>,
+    failed: bool,
+}
+impl<S: State + Send, R: RngExt + SeedableRng + Send> ParallelSession<S, R>
+where
+    S::Params: Clone + Send,
+{
+    pub fn new(
+        grid: EnergyGrid,
+        states: Vec<S>,
+        params: S::Params,
+        config: ParallelConfig,
+    ) -> Result<Self> {
+        config.validate(grid.len())?;
+        let count = config.windows.len() * config.walkers_per_window;
+        if states.len() != count {
+            return Err(Error::Invalid("one initial state is required per walker"));
         }
-        if walkers
+        let mut seed_rng = R::seed_from_u64(config.seed);
+        let mut walkers = Vec::with_capacity(count);
+        for (i, state) in states.into_iter().enumerate() {
+            let range = &config.windows[i / config.walkers_per_window];
+            let mask: Vec<_> = (0..grid.len()).map(|b| range.contains(&b)).collect();
+            let dos = mask
+                .iter()
+                .map(|a| if *a { 0.0 } else { f64::NEG_INFINITY })
+                .collect();
+            let data = RawWangLandauData::with_support(grid.clone(), mask, dos)?;
+            let rng = R::seed_from_u64(seed_rng.random());
+            walkers.push(
+                catch_unwind(AssertUnwindSafe(|| {
+                    Walker::new(state, params.clone(), rng, data, config.run.clone())
+                }))
+                .map_err(|_| Error::WorkerFailed)??,
+            );
+        }
+        Ok(Self {
+            walkers,
+            exchange_rng: R::seed_from_u64(seed_rng.random()),
+            config,
+            parity: 0,
+            exchange_attempts: 0,
+            accepted_exchanges: 0,
+            stop_reason: None,
+            failed: false,
+        })
+    }
+    pub fn diagnostics(&self) -> Vec<&Diagnostics> {
+        self.walkers.iter().map(|w| &w.diagnostics).collect()
+    }
+    pub fn advance(
+        &mut self,
+        chunks: u64,
+        cancel: Option<&AtomicBool>,
+    ) -> Result<Option<StopReason>> {
+        if self.failed {
+            return Err(Error::WorkerFailed);
+        }
+        if chunks == 0 {
+            return Ok(self.stop_reason);
+        }
+        if self.stop_reason == Some(StopReason::Cancelled) {
+            self.stop_reason = None;
+            for w in &mut self.walkers {
+                if w.diagnostics.stop_reason == Some(StopReason::Cancelled) {
+                    w.diagnostics.stop_reason = None;
+                }
+            }
+        }
+        if self.stop_reason.is_some() {
+            return Ok(self.stop_reason);
+        }
+        for _ in 0..chunks {
+            match self.chunk(cancel) {
+                Ok(Some(reason)) => {
+                    self.stop_reason = Some(reason);
+                    break;
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    self.failed = true;
+                    return Err(e);
+                }
+            }
+        }
+        Ok(self.stop_reason)
+    }
+    fn chunk(&mut self, cancel: Option<&AtomicBool>) -> Result<Option<StopReason>> {
+        if cancelled(cancel) {
+            return Ok(Some(StopReason::Cancelled));
+        }
+        if self
+            .walkers
             .iter()
             .all(|w| w.diagnostics.stop_reason == Some(StopReason::TargetReached))
         {
-            break StopReason::TargetReached;
+            return Ok(Some(StopReason::TargetReached));
         }
-        // Indexed parallel iteration preserves result ordering; there are no
-        // channels or blocking inter-worker barriers inside model calls.
-        let results: Vec<Result<()>> = walkers
+        let failed = AtomicBool::new(false);
+        let results: Vec<Result<()>> = self
+            .walkers
             .par_iter_mut()
             .map(|w| {
                 let outcome = catch_unwind(AssertUnwindSafe(|| {
-                    for _ in 0..config.exchange_every.min(config.run.max_steps) {
-                        if cancelled(cancel) || failed.load(std::sync::atomic::Ordering::Relaxed) {
+                    for _ in 0..self.config.exchange_every.min(self.config.run.max_steps) {
+                        if cancelled(cancel) || failed.load(Ordering::Relaxed) {
                             break;
                         }
                         match w.diagnostics.stop_reason {
@@ -140,7 +223,7 @@ where
                                     .mixing_steps
                                     .checked_add(1)
                                     .ok_or(Error::CounterOverflow)?;
-                                w.transition(None)?; // frozen DOS but mobile walker, per reference
+                                w.transition(None)?;
                                 w.diagnostics.mixing_steps = next;
                             }
                             Some(_) => break,
@@ -155,72 +238,144 @@ where
                     Ok(())
                 }))
                 .map_err(|_| Error::WorkerFailed)
-                .and_then(|result| result);
+                .and_then(|r| r);
                 if outcome.is_err() {
-                    failed.store(true, std::sync::atomic::Ordering::Relaxed);
+                    failed.store(true, Ordering::Relaxed);
                 }
                 outcome
             })
             .collect();
-        for result in results {
-            result?;
+        for r in results {
+            r?;
         }
         if cancelled(cancel) {
-            break StopReason::Cancelled;
+            return Ok(Some(StopReason::Cancelled));
         }
-        if walkers
+        if self
+            .walkers
             .iter()
             .any(|w| w.diagnostics.stop_reason == Some(StopReason::BudgetExhausted))
         {
-            break StopReason::BudgetExhausted;
+            return Ok(Some(StopReason::BudgetExhausted));
         }
-        if walkers
+        if self
+            .walkers
             .iter()
             .all(|w| w.diagnostics.stop_reason == Some(StopReason::TargetReached))
         {
-            break StopReason::TargetReached;
+            return Ok(Some(StopReason::TargetReached));
         }
-        for i in (parity..config.windows.len().saturating_sub(1)).step_by(2) {
-            for replica in 0..config.walkers_per_window {
-                let a = i * config.walkers_per_window + replica;
-                let b = (i + 1) * config.walkers_per_window + replica;
-                let (left, right) = walkers.split_at_mut(b);
-                if let Some(accepted) = exchange(&mut left[a], &mut right[0], &mut exchange_rng)? {
-                    exchange_attempts = exchange_attempts
-                        .checked_add(1)
-                        .ok_or(Error::CounterOverflow)?;
-                    accepted_exchanges = accepted_exchanges
-                        .checked_add(u64::from(accepted))
-                        .ok_or(Error::CounterOverflow)?;
+        for i in (self.parity..self.config.windows.len().saturating_sub(1)).step_by(2) {
+            for replica in 0..self.config.walkers_per_window {
+                if self.exchange_attempts == u64::MAX || self.accepted_exchanges == u64::MAX {
+                    return Err(Error::CounterOverflow);
+                }
+                let a = i * self.config.walkers_per_window + replica;
+                let b = (i + 1) * self.config.walkers_per_window + replica;
+                let (left, right) = self.walkers.split_at_mut(b);
+                if let Some(accepted) =
+                    exchange(&mut left[a], &mut right[0], &mut self.exchange_rng)?
+                {
+                    self.exchange_attempts += 1;
+                    self.accepted_exchanges += u64::from(accepted);
                 }
             }
         }
-        parity = 1 - parity;
-    };
-    let mut runs: Vec<_> = walkers.into_iter().map(Walker::finish).collect();
-    for r in &mut runs {
-        if r.diagnostics.stop_reason.is_none() {
-            r.diagnostics.stop_reason = Some(stop_reason);
-        }
+        self.parity ^= 1;
+        Ok(None)
     }
-    let merged = if stop_reason == StopReason::TargetReached && config.run.sampling_steps > 0 {
-        let mut fragments = Vec::new();
-        for group in runs.chunks(config.walkers_per_window) {
-            fragments.push(average_replicas(
-                &group.iter().map(|r| &r.data).collect::<Vec<_>>(),
-            )?);
+    pub fn finish(self) -> Result<ParallelResult<S>> {
+        if self.failed {
+            return Err(Error::WorkerFailed);
         }
-        Some(merge_windows(&fragments)?)
-    } else {
-        None
-    };
-    Ok(ParallelResult {
-        walkers: runs,
-        merged,
-        stop_reason,
-        exchange_attempts,
-        accepted_exchanges,
-    })
+        let stop_reason = self.stop_reason.unwrap_or(StopReason::Cancelled);
+        let mut runs: Vec<_> = self.walkers.into_iter().map(Walker::finish).collect();
+        for r in &mut runs {
+            if r.diagnostics.stop_reason.is_none() {
+                r.diagnostics.stop_reason = Some(stop_reason);
+            }
+        }
+        let merged =
+            if stop_reason == StopReason::TargetReached && self.config.run.sampling_steps > 0 {
+                let mut fragments = Vec::new();
+                for group in runs.chunks(self.config.walkers_per_window) {
+                    fragments.push(average_replicas(
+                        &group.iter().map(|r| &r.data).collect::<Vec<_>>(),
+                    )?);
+                }
+                Some(merge_windows(&fragments)?)
+            } else {
+                None
+            };
+        Ok(ParallelResult {
+            walkers: runs,
+            merged,
+            stop_reason,
+            exchange_attempts: self.exchange_attempts,
+            accepted_exchanges: self.accepted_exchanges,
+        })
+    }
+}
+#[cfg(feature = "checkpoint")]
+impl<S: State + Send, R: RngExt + SeedableRng + Send> ParallelSession<S, R>
+where
+    S: serde::Serialize + serde::de::DeserializeOwned,
+    S::Params: Clone + Send + serde::Serialize + serde::de::DeserializeOwned,
+    R: serde::Serialize + serde::de::DeserializeOwned,
+{
+    fn validate(&self) -> Result<()> {
+        let first = self
+            .walkers
+            .first()
+            .ok_or(Error::Invalid("empty checkpoint"))?;
+        self.config.validate(first.data.grid.len())?;
+        if self.failed
+            || self.parity > 1
+            || self.accepted_exchanges > self.exchange_attempts
+            || self.walkers.len() != self.config.windows.len() * self.config.walkers_per_window
+        {
+            return Err(Error::Invalid("invalid parallel checkpoint"));
+        }
+        for (i, w) in self.walkers.iter().enumerate() {
+            crate::session::validate_walker(w, true)?;
+            let range = &self.config.windows[i / self.config.walkers_per_window];
+            if w.config != self.config.run
+                || w.data.grid != first.data.grid
+                || w.data
+                    .accessible
+                    .iter()
+                    .enumerate()
+                    .any(|(b, a)| *a != range.contains(&b))
+            {
+                return Err(Error::Invalid("parallel checkpoint support mismatch"));
+            }
+        }
+        if self.stop_reason == Some(StopReason::TargetReached)
+            && self
+                .walkers
+                .iter()
+                .any(|w| w.diagnostics.stop_reason != Some(StopReason::TargetReached))
+        {
+            return Err(Error::Invalid("incomplete parallel checkpoint"));
+        }
+        Ok(())
+    }
+    pub fn save(
+        &self,
+        path: impl AsRef<std::path::Path>,
+        model: &str,
+    ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.validate()?;
+        csta_core::checkpoint::save(path, model, self)
+    }
+    pub fn load(
+        path: impl AsRef<std::path::Path>,
+        model: &str,
+    ) -> std::result::Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let s: Self = csta_core::checkpoint::load(path, model)?;
+        s.validate()?;
+        Ok(s)
+    }
 }
 
 fn exchange<S: State, R: RngExt>(
